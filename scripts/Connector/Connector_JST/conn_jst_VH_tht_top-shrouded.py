@@ -40,7 +40,7 @@ pad_copper_y_solder_length = 0.5 #How much copper should be in y direction?
 min_annular_ring = 0.15
 drill = 1.7 # 1.65 +0.1/-0.0 -> 1.7+/-0.05
 mh_drill = 1.45
-mh_at = [-1.5, -3.4] #contratiction (y position) in datasheet!
+mh_at = [-1.5, -3.4]
 
 pin_range = range(2, 11) #number of pins in each row
 
@@ -205,13 +205,13 @@ if __name__ == "__main__":
 
     with open(args.global_config, 'r') as config_stream:
         try:
-            configuration = yaml.load(config_stream)
+            configuration = yaml.safe_load(config_stream)
         except yaml.YAMLError as exc:
             print(exc)
 
     with open(args.series_config, 'r') as config_stream:
         try:
-            configuration.update(yaml.load(config_stream))
+            configuration.update(yaml.safe_load(config_stream))
         except yaml.YAMLError as exc:
             print(exc)
 

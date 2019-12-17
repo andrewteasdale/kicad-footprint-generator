@@ -42,7 +42,7 @@ pins_range = [20,30,40,50,60,70,80]
 
 #Molex part number
 #n = number of circuits per row
-part_code = "52991-0{n:02}0"
+part_code = "52991-0{n:02}8"
 
 pitch = 0.5
 
@@ -166,13 +166,13 @@ if __name__ == "__main__":
 
     with open(args.global_config, 'r') as config_stream:
         try:
-            configuration = yaml.load(config_stream)
+            configuration = yaml.safe_load(config_stream)
         except yaml.YAMLError as exc:
             print(exc)
 
     with open(args.series_config, 'r') as config_stream:
         try:
-            configuration.update(yaml.load(config_stream))
+            configuration.update(yaml.safe_load(config_stream))
         except yaml.YAMLError as exc:
             print(exc)
 
