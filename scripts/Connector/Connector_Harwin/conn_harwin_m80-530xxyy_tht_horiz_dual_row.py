@@ -13,37 +13,43 @@ along with kicad-footprint-generator. If not, see < http://www.gnu.org/licenses/
 '''
 import sys
 import os
-#sys.path.append(os.path.join(sys.path[0],"..","..","kicad_mod")) # load kicad_mod path
-# export PYTHONPATH="${PYTHONPATH}<path to kicad-footprint-generator directory>"
+import math
+
 sys.path.append(os.path.join(sys.path[0], "..", "..", ".."))  # load parent path of KicadModTree
 from math import sqrt
 import argparse
 import yaml
-#from helpers import *
+from helpers import *
+
 from KicadModTree import *
 sys.path.append(os.path.join(sys.path[0], "..", "..", "tools"))  # load parent path of tools
 from footprint_text_fields import addTextFields
 
-series = 'M20'
-series_long = 'Female Vertical Surface Mount Double Row 2.54mm (0.1 inch) Pitch PCB Connector'
+# Basic configuration
+
+series = 'M80'
+series_long = 'Male Horizontal Through Hole Double Row 2.00mm Pitch PCB Connector'
 manufacturer = 'Harwin'
-datasheet = 'https://cdn.harwin.com/pdfs/M20-781.pdf'
-# https://cdn.harwin.com/pdfs/Harwin_Product_Catalog_page_225.pdf
-pn = 'M20-781{n:02}45'
+datasheet = 'https://cdn.harwin.com/pdfs/M80-530.pdf'
+
+pn = '530{n:02}xx'
 number_of_rows = 2
-orientation = 'V'
+orientation = 'H'
 
-pitch = 2.54
-peg_drill_tht = 1.02
-mount_drill = 1.8
-pad_size = [1.78, 1.02]
+pitch = 2.00
 
-pincount_range = [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20]
+pad_drill = 0.80
+pad_size = 1.35
+
+# Pincount range for standard [and generally available] product variants
+pincount_range_standard = [4, 6, 8, 10, 12, 14, 20, 26, 34, 42, 50]
+# Pincount range for extended range, including semi-custom variants, that nonetheless have valid part numbers
+pincount_range_extended = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50]
 
 def generate_footprint(pins, configuration):
 
     mpn = pn.format(n=pins)
-    pins_per_row = pins
+    pins_per_row = int(pins / number_of_rows)
 
     # handle arguments
     orientation_str = configuration['orientation_options'][orientation]
@@ -62,53 +68,27 @@ def generate_footprint(pins, configuration):
 
     ########################## Dimensions ##############################
 
-    A = 2.54 * pins
-    B = 2.54 * (pins-1)
-    C = B - 2.54
+    A = pins - 2
+    B = pins + 5
+    C = pins + 10
 
     body_edge={
-        'left': -2.54,
-        'right': 2.54,
-        'top': -A/2,
-        'bottom': A/2
+        'left': 2.4,
+        'right': 8,
+        'top': -((C - A) / 2),
+        'bottom': A + ((C - A) / 2)
     }
 
     ############################# Pads ##################################
     #
-    # Mount Pegs
-    #
-    if pins == 2:
-        kicad_mod.append(Pad(at=[0, 0], number="",
-            type=Pad.TYPE_NPTH, shape=Pad.SHAPE_CIRCLE, size=mount_drill,
-            drill=mount_drill, layers=Pad.LAYERS_NPTH))
-    else:
-        kicad_mod.append(Pad(at=[0, -C/2], number="",
-            type=Pad.TYPE_NPTH, shape=Pad.SHAPE_CIRCLE, size=mount_drill,
-            drill=mount_drill, layers=Pad.LAYERS_NPTH))
-        kicad_mod.append(Pad(at=[0, C/2], number="",
-            type=Pad.TYPE_NPTH, shape=Pad.SHAPE_CIRCLE, size=mount_drill,
-            drill=mount_drill, layers=Pad.LAYERS_NPTH))
-
-    #
-    # THT Pegs
-    #
-    kicad_mod.append(PadArray(start=[-1.27, -B/2], initial="", pincount=pins,
-        y_spacing=pitch, type=Pad.TYPE_NPTH, shape=Pad.SHAPE_CIRCLE,
-        size=peg_drill_tht, drill=peg_drill_tht, layers=Pad.LAYERS_NPTH))
-
-    kicad_mod.append(PadArray(start=[1.27, -B/2], initial="", pincount=pins,
-        y_spacing=pitch, type=Pad.TYPE_NPTH, shape=Pad.SHAPE_CIRCLE,
-        size=peg_drill_tht, drill=peg_drill_tht, layers=Pad.LAYERS_NPTH))
-
-    #
     # Add pads
     #
-    kicad_mod.append(PadArray(start=[-2.91, -B/2], initial=1,
-        pincount=pins, increment=1,  y_spacing=pitch, size=pad_size,
-        type=Pad.TYPE_SMT, shape=Pad.SHAPE_RECT, layers=Pad.LAYERS_SMT))
-    kicad_mod.append(PadArray(start=[2.91, -B/2], initial=pins+1,
-        pincount=pins, increment=1,  y_spacing=pitch, size=pad_size,
-        type=Pad.TYPE_SMT, shape=Pad.SHAPE_RECT, layers=Pad.LAYERS_SMT))
+    kicad_mod.append(PadArray(start=[0.00, 0.00], initial=1,
+        pincount=pins_per_row, increment=1,  y_spacing=pitch, size=pad_size, drill=pad_drill,
+        type=Pad.TYPE_THT, shape=Pad.SHAPE_CIRCLE, layers=Pad.LAYERS_THT))
+    kicad_mod.append(PadArray(start=[pitch, 0.00], initial=pins_per_row + 1,
+        pincount=pins_per_row, increment=1,  y_spacing=pitch, size=pad_size, drill=pad_drill,
+        type=Pad.TYPE_THT, shape=Pad.SHAPE_CIRCLE, layers=Pad.LAYERS_THT))
 
     ######################## Fabrication Layer ###########################
     main_body_poly= [
@@ -121,46 +101,73 @@ def generate_footprint(pins, configuration):
     kicad_mod.append(PolygoneLine(polygone=main_body_poly,
         width=configuration['fab_line_width'], layer="F.Fab"))
 
+    main_arrow_size= 0.4
+    main_arrow_offset= -1.5
     main_arrow_poly= [
-        {'x': -2.54, 'y': body_edge['top'] + 1.27 - .4},
-        {'x': -1.9, 'y': body_edge['top'] + 1.27},
-        {'x': -2.54, 'y': body_edge['top'] + 1.27 + .4},
+        {'x': main_arrow_offset - main_arrow_size, 'y': 0 - .4},
+        {'x': main_arrow_offset, 'y': 0},
+        {'x': main_arrow_offset - main_arrow_size, 'y': 0 + .4},
     ]
     kicad_mod.append(PolygoneLine(polygone=main_arrow_poly,
         width=configuration['fab_line_width'], layer="F.Fab"))
 
     ######################## SilkS Layer ###########################
-    poly_s_top= [
-        {'x': body_edge['left'] - configuration['silk_fab_offset'], 'y': body_edge['top'] - configuration['silk_fab_offset'] + .7},
-        {'x': body_edge['left'] - configuration['silk_fab_offset'], 'y': body_edge['top'] - configuration['silk_fab_offset']},
-        {'x': body_edge['right'] + configuration['silk_fab_offset'], 'y': body_edge['top'] - configuration['silk_fab_offset']},
-        {'x': body_edge['right'] + configuration['silk_fab_offset'], 'y': body_edge['top'] - configuration['silk_fab_offset'] + .7},
+    SilkPad_offset = (((pad_size) + configuration['silk_line_width'] ) / 2) + configuration['silk_pad_clearance']
+    SilkBody_indent = 0.615  # This is a result of the 'overhang' on the sides of the component
+
+    poly_silk_outline= [
+        {'x': body_edge['left'] - configuration['silk_fab_offset'], 'y': -SilkPad_offset},
+        {'x': body_edge['left'] - configuration['silk_fab_offset'], 'y': body_edge['top'] - configuration['silk_fab_offset'] + SilkBody_indent},
+        {'x': body_edge['right'] + configuration['silk_fab_offset'], 'y': body_edge['top'] - configuration['silk_fab_offset'] + SilkBody_indent},
+        {'x': body_edge['right'] + configuration['silk_fab_offset'], 'y': body_edge['bottom'] + configuration['silk_fab_offset'] - SilkBody_indent},
+        {'x': body_edge['left'] - configuration['silk_fab_offset'], 'y': body_edge['bottom'] + configuration['silk_fab_offset'] - SilkBody_indent},
+        {'x': body_edge['left'] - configuration['silk_fab_offset'], 'y': A + SilkPad_offset}
     ]
-    kicad_mod.append(PolygoneLine(polygone=poly_s_top,
+    kicad_mod.append(PolygoneLine(polygone=poly_silk_outline,
         width=configuration['silk_line_width'], layer="F.SilkS"))
 
-    poly_s_bot= [
-        {'x': body_edge['left'] - configuration['silk_fab_offset'], 'y': body_edge['bottom'] + configuration['silk_fab_offset'] - .7},
-        {'x': body_edge['left'] - configuration['silk_fab_offset'], 'y': body_edge['bottom'] + configuration['silk_fab_offset']},
-        {'x': body_edge['right'] + configuration['silk_fab_offset'], 'y': body_edge['bottom'] + configuration['silk_fab_offset']},
-        {'x': body_edge['right'] + configuration['silk_fab_offset'], 'y': body_edge['bottom'] + configuration['silk_fab_offset'] - .7},
+    poly_silk_pin1_ident= [
+        {'x': -(((pad_size) + configuration['silk_line_width'] ) / 2) - configuration['silk_pad_clearance'], 'y': (pad_size - configuration['silk_line_width']) / 2},
+        {'x': -(((pad_size) + configuration['silk_line_width'] ) / 2) - configuration['silk_pad_clearance'], 'y': -(pad_size - configuration['silk_line_width']) / 2},
     ]
-    kicad_mod.append(PolygoneLine(polygone=poly_s_bot,
+    kicad_mod.append(PolygoneLine(polygone=poly_silk_pin1_ident,
         width=configuration['silk_line_width'], layer="F.SilkS"))
 
     ######################## CrtYd Layer ###########################
     CrtYd_offset = configuration['courtyard_offset']['connector']
     CrtYd_grid = configuration['courtyard_grid']
 
-    poly_yd = [
-        {'x': -3.8 - CrtYd_offset, 'y': body_edge['top'] - CrtYd_offset},
-        {'x': 3.8 + CrtYd_offset, 'y': body_edge['top'] - CrtYd_offset},
-        {'x': 3.8 + CrtYd_offset, 'y': body_edge['bottom'] + CrtYd_offset},
-        {'x': -3.8 - CrtYd_offset, 'y': body_edge['bottom'] + CrtYd_offset},
-        {'x': -3.8 - CrtYd_offset, 'y': body_edge['top'] - CrtYd_offset}
+    CrtYd_leftedge = -roundToBase(((pad_size/2) + CrtYd_offset),CrtYd_grid)
+    CrtYd_rightedge = body_edge['right'] + CrtYd_offset
+    CrtYd_topedge = body_edge['top'] - CrtYd_offset
+    CrtYd_bottomedge = body_edge['bottom'] + CrtYd_offset
+    CrtYd_innerleftedge = body_edge['left'] - CrtYd_offset
+    CrtYd_innertopedge = -roundToBase(((pad_size/2) + CrtYd_offset),CrtYd_grid)
+    CrtYd_innerbottomedge = A + roundToBase(((pad_size/2) + CrtYd_offset),CrtYd_grid)
+
+    poly_yd_simple = [
+        {'x': CrtYd_leftedge, 'y': CrtYd_topedge},
+        {'x': CrtYd_rightedge, 'y': CrtYd_topedge},
+        {'x': CrtYd_rightedge, 'y': CrtYd_bottomedge},
+        {'x': CrtYd_leftedge, 'y': CrtYd_bottomedge},
+        {'x': CrtYd_leftedge, 'y': CrtYd_topedge}
     ]
 
-    kicad_mod.append(PolygoneLine(polygone=poly_yd,
+    poly_yd_complex = [
+        {'x': CrtYd_innerleftedge, 'y': CrtYd_topedge},
+        {'x': CrtYd_rightedge, 'y': CrtYd_topedge},
+        {'x': CrtYd_rightedge, 'y': CrtYd_bottomedge},
+        {'x': CrtYd_innerleftedge, 'y': CrtYd_bottomedge},
+        {'x': CrtYd_innerleftedge, 'y': CrtYd_innerbottomedge},
+        {'x': CrtYd_leftedge, 'y': CrtYd_innerbottomedge},
+        {'x': CrtYd_leftedge, 'y': CrtYd_innertopedge},
+        {'x': CrtYd_innerleftedge, 'y': CrtYd_innertopedge},
+        {'x': CrtYd_innerleftedge, 'y': CrtYd_topedge}
+    ]
+
+#   kicad_mod.append(PolygoneLine(polygone=poly_yd_simple,
+#       layer='F.CrtYd', width=configuration['courtyard_line_width']))
+    kicad_mod.append(PolygoneLine(polygone=poly_yd_complex,
         layer='F.CrtYd', width=configuration['courtyard_line_width']))
 
     ######################### Text Fields ###############################
@@ -168,7 +175,7 @@ def generate_footprint(pins, configuration):
     cy2 = body_edge['bottom'] + configuration['courtyard_offset']['connector'] + 0.2
 
     addTextFields(kicad_mod=kicad_mod, configuration=configuration, body_edges=body_edge,
-        courtyard={'top':cy1, 'bottom':cy2}, fp_name=footprint_name, text_y_inside_position='top')
+        courtyard={'top':cy1, 'bottom':cy2}, fp_name=footprint_name, text_y_inside_position='center', allow_rotation=True)
 
     ##################### Write to File and 3D ############################
     model3d_path_prefix = configuration.get('3d_model_prefix','${KISYS3DMOD}/')
@@ -208,6 +215,5 @@ if __name__ == "__main__":
 
     configuration['kicad4_compatible'] = args.kicad4_compatible
 
-    for pincount in pincount_range:
+    for pincount in pincount_range_standard:
         generate_footprint(pincount, configuration)
-        print('Done')
